@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Title, Textarea, Button, Card } from '@telegram-apps/telegram-ui';
-import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
+import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 import { Page } from '@/components/Page.tsx';
 import { ChatBox } from '@/components/ChatBox';
+import { useToast } from '../../components/ToastProvider';
 
 // SVG icons
 const PaperPlaneIcon = () => (
@@ -33,6 +34,8 @@ export const IndexPage = () => {
   const chatBoxRef = useRef<HTMLFormElement>(null);
   const [chatBoxHeight, setChatBoxHeight] = useState(180);
   const [greeting, setGreeting] = useState('Hello, DeFi Explorer!');
+  const toast = useToast();
+  const [tonConnectUI] = useTonConnectUI();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -65,13 +68,72 @@ export const IndexPage = () => {
     setInput('');
   };
 
-  const handleExecute = (strategyTitle: string) => {
-    alert(`Executing: ${strategyTitle} (stub)`);
+  const handleExecute = async (strategy: any) => {
+    if (!wallet || !wallet.account?.address) {
+      toast('Please connect your wallet to execute a strategy.', 'error');
+      return;
+    }
+    try {
+      const res = await fetch('http://localhost:4000/execute-strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strategy, walletAddress: wallet.account.address })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast('Strategy executed! (Demo) Reward granted.', 'success');
+        // Optionally, fetch and update rewards/history here
+      } else {
+        toast('Failed to execute strategy: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (e) {
+      toast('Failed to execute strategy: ' + (e instanceof Error ? e.message : String(e)), 'error');
+    }
   };
 
   const handleSuggestion = (suggestion: string) => {
     setInput(suggestion);
     setTimeout(() => handleSend(), 100);
+  };
+
+  // Add a demo swap button handler
+  const handleDemoSwap = async () => {
+    if (!wallet || !wallet.account?.address) {
+      toast('Please connect your wallet to execute a swap.', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('http://localhost:4000/execute-strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy: { type: 'swap', title: 'Swap TON to jUSDT', description: 'Swap 1 TON to jUSDT on STON.fi (testnet)' },
+          walletAddress: wallet.account.address,
+          amount: '100000000' // 1 TON in nanotons
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.payload && data.to && data.value) {
+        // Send transaction via TonConnect
+        await tonConnectUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 360,
+          messages: [
+            {
+              address: data.to,
+              amount: data.value,
+              payload: data.payload,
+            },
+          ],
+        });
+        toast('Swap transaction sent! Check your wallet.', 'success');
+      } else {
+        toast('Failed to build swap transaction: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (e) {
+      toast('Failed to send swap transaction: ' + (e instanceof Error ? e.message : String(e)), 'error');
+    }
+    setLoading(false);
   };
 
   return (
@@ -83,6 +145,28 @@ export const IndexPage = () => {
           <div style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.10)', borderRadius: 20, overflow: 'hidden' }}>
             <TonConnectButton style={{ background: '#232e3c', color: '#8ee4af', borderRadius: 20, fontWeight: 500, fontSize: 16, padding: '8px 18px', border: 'none' }} />
           </div>
+        </div>
+        {/* Demo swap button */}
+        <div style={{ display: 'flex', justifyContent: 'center', margin: '24px 0 0 0' }}>
+          <button
+            onClick={handleDemoSwap}
+            disabled={loading}
+            style={{
+              background: '#3a7afe',
+              color: '#fff',
+              borderRadius: 12,
+              fontWeight: 600,
+              border: 'none',
+              padding: '12px 32px',
+              fontSize: 18,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              transition: 'background 0.2s',
+              marginBottom: 8,
+            }}
+          >
+            Swap 1 TON to jUSDT (STON.fi Testnet)
+          </button>
         </div>
         {/* Chat area */}
         <div style={{ flex: 1, overflowY: 'auto', padding: `0 0 ${chatBoxHeight}px 0`, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: messages.length === 0 ? 'center' : 'flex-start', position: 'relative' }}>
@@ -140,7 +224,7 @@ export const IndexPage = () => {
                         }}
                         onMouseOver={e => (e.currentTarget.style.background = '#2563eb')}
                         onMouseOut={e => (e.currentTarget.style.background = '#3a7afe')}
-                        onClick={() => handleExecute(strategy.title)}
+                        onClick={() => handleExecute(strategy)}
                       >
                         Execute
                       </button>

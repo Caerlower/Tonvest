@@ -5,6 +5,8 @@ import { InitDataPage } from '@/pages/InitDataPage.tsx';
 import { LaunchParamsPage } from '@/pages/LaunchParamsPage.tsx';
 import { ThemeParamsPage } from '@/pages/ThemeParamsPage.tsx';
 import { TONConnectPage } from '@/pages/TONConnectPage/TONConnectPage';
+import { ProfilePage } from '@/pages/ProfilePage.tsx';
+import { DeFiProtocolsPage } from '@/pages/DeFiProtocolsPage.tsx';
 
 interface Route {
   path: string;
@@ -41,4 +43,6 @@ export const routes: Route[] = [
       </svg>
     ),
   },
+  { path: '/profile', Component: ProfilePage, title: 'Profile' },
+  { path: '/protocols', Component: DeFiProtocolsPage, title: 'DeFi Protocols' },
 ];

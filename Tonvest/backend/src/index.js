@@ -2,6 +2,12 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import axios from 'axios';
+import { beginCell, toNano } from '@ton/core';
+import { Low } from 'lowdb';
+import { JSONFile } from 'lowdb/node';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { buildSwapTxParams, JettonSwapParams, Network, JettonRootAddresses } from '@ston-fi/sdk';
 
 dotenv.config();
 const app = express();
@@ -63,9 +69,14 @@ app.post('/strategy', async (req, res) => {
   }
 });
 
-// --- In-memory stores for demo (replace with DB in production) ---
-const userHistory = new Map(); // walletAddress -> [{ strategy, timestamp }]
-const userRewards = new Map(); // walletAddress -> [{ type, detail, timestamp }]
+// --- Persistent storage with lowdb ---
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dbFile = path.join(__dirname, '../user_data.json');
+const adapter = new JSONFile(dbFile);
+const db = new Low(adapter, { userHistory: {}, userRewards: {} });
+await db.read();
+
+function saveDb() { return db.write(); }
 
 // --- GET /defi-data ---
 app.get('/defi-data', async (req, res) => {
@@ -81,21 +92,69 @@ app.get('/defi-data', async (req, res) => {
 
 // --- POST /execute-strategy ---
 app.post('/execute-strategy', async (req, res) => {
-  const { strategy, walletAddress } = req.body;
+  const { strategy, walletAddress, recipient, amount } = req.body;
   if (!walletAddress || typeof walletAddress !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid walletAddress' });
   }
   if (!strategy || typeof strategy !== 'object' || !strategy.title) {
     return res.status(400).json({ error: 'Missing or invalid strategy' });
   }
+
+  // --- Real STON.fi swap integration for testnet ---
+  if (strategy.type === 'swap') {
+    try {
+      // Example: swap TON to jUSDT on testnet
+      const params = {
+        userWalletAddress: walletAddress,
+        offerJetton: JettonRootAddresses.TON, // TON
+        askJetton: JettonRootAddresses.jUSDT, // jUSDT
+        offerAmount: amount ? amount.toString() : '100000000', // 1 TON in nanotons
+        network: Network.TESTNET,
+      };
+      const tx = await buildSwapTxParams(params);
+      return res.json({
+        status: 'STON.fi swap payload built',
+        to: tx.to,
+        value: tx.value,
+        payload: tx.payload,
+        strategy,
+        walletAddress
+      });
+    } catch (e) {
+      return res.status(500).json({ error: 'Failed to build STON.fi swap payload', detail: e.message });
+    }
+  }
+
   // Record in user history
-  const hist = userHistory.get(walletAddress) || [];
-  hist.push({ strategy, timestamp: Date.now() });
-  userHistory.set(walletAddress, hist);
+  db.data.userHistory[walletAddress] ||= [];
+  db.data.userHistory[walletAddress].push({ strategy, timestamp: Date.now() });
   // Grant a mock reward
-  const rewards = userRewards.get(walletAddress) || [];
-  rewards.push({ type: 'star', detail: `Executed: ${strategy.title}`, timestamp: Date.now() });
-  userRewards.set(walletAddress, rewards);
+  db.data.userRewards[walletAddress] ||= [];
+  db.data.userRewards[walletAddress].push({ type: 'star', detail: `Executed: ${strategy.title}`, timestamp: Date.now() });
+  await saveDb();
+
+  // --- TON testnet transfer payload (demo fallback) ---
+  if (recipient && amount) {
+    try {
+      const transferAmount = toNano(amount.toString());
+      const payload = beginCell()
+        .storeUint(0, 32) // op code (0 = simple transfer)
+        .storeUint(0, 64) // query id
+        .endCell();
+      // Return the payload as base64 for TonConnect
+      return res.json({
+        status: 'Testnet transfer payload built',
+        to: recipient,
+        value: transferAmount.toString(),
+        payload: payload.toBoc().toString('base64'),
+        strategy,
+        walletAddress
+      });
+    } catch (e) {
+      return res.status(500).json({ error: 'Failed to build TON payload', detail: e.message });
+    }
+  }
+
   // TODO: Build and return a real TON transaction payload or interact with smart contract
   res.json({
     status: 'Strategy execution simulated',
@@ -109,14 +168,14 @@ app.post('/execute-strategy', async (req, res) => {
 app.get('/history', async (req, res) => {
   const walletAddress = req.walletAddress;
   if (!walletAddress) return res.status(400).json({ error: 'Missing walletAddress' });
-  res.json({ walletAddress, history: userHistory.get(walletAddress) || [] });
+  res.json({ walletAddress, history: db.data.userHistory[walletAddress] || [] });
 });
 
 // --- GET /rewards ---
 app.get('/rewards', async (req, res) => {
   const walletAddress = req.walletAddress;
   if (!walletAddress) return res.status(400).json({ error: 'Missing walletAddress' });
-  res.json({ walletAddress, rewards: userRewards.get(walletAddress) || [] });
+  res.json({ walletAddress, rewards: db.data.userRewards[walletAddress] || [] });
 });
 
 // POST /sbt - SBT minting/status (stub)

@@ -7,7 +7,7 @@ import { Low } from 'lowdb';
 import { JSONFile } from 'lowdb/node';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { buildSwapTxParams, JettonSwapParams, Network, JettonRootAddresses } from '@ston-fi/sdk';
+// import { buildSwapTxParams, JettonSwapParams, Network, JettonRootAddresses } from '@ston-fi/sdk';
 
 dotenv.config();
 const app = express();
@@ -101,6 +101,8 @@ app.post('/execute-strategy', async (req, res) => {
   }
 
   // --- Real STON.fi swap integration for testnet ---
+  // TODO: Install @ston-fi/sdk and uncomment the import at the top
+  /*
   if (strategy.type === 'swap') {
     try {
       // Example: swap TON to jUSDT on testnet
@@ -124,6 +126,7 @@ app.post('/execute-strategy', async (req, res) => {
       return res.status(500).json({ error: 'Failed to build STON.fi swap payload', detail: e.message });
     }
   }
+  */
 
   // Record in user history
   db.data.userHistory[walletAddress] ||= [];

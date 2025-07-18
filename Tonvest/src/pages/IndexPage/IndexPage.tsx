@@ -41,7 +41,7 @@ export const IndexPage = () => {
     setLoading(true);
     setSwarmResults(null);
     try {
-      const res = await fetch('http://localhost:4000/swarm-strategy', {
+      const res = await fetch('http://localhost:4000/strategy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: messageToSend })

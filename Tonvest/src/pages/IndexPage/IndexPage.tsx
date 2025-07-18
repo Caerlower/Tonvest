@@ -48,20 +48,24 @@ export const IndexPage = () => {
       });
       if (!res.ok) {
         const err = await res.json();
-        toast('AI swarm error: ' + (err.error || 'Unknown error'), 'error');
-        setMessages(msgs => [...msgs, { role: 'ai', text: 'Error fetching strategies from AI swarm.' }]);
+        toast('AI strategy error: ' + (err.error || 'Unknown error'), 'error');
+        setMessages(msgs => [...msgs, { role: 'ai', text: 'Error fetching strategies from AI.' }]);
         setSwarmResults(null);
         setLoading(false);
         setInput('');
         return;
       }
       const data = await res.json();
-      if (data.agents) {
-        setMessages(msgs => [...msgs, { role: 'ai', text: 'Here are the strategies from our DeFi swarm agents:' }]);
-        setSwarmResults(data);
+      if (data.strategies && Array.isArray(data.strategies)) {
+        setMessages(msgs => [...msgs, { role: 'ai', text: data.answer || 'Here are the DeFi strategies:' }]);
+        // Transform backend response to match frontend expectations
+        const transformedData = {
+          agents: data.strategies
+        };
+        setSwarmResults(transformedData);
       } else {
-        toast('AI swarm error: Invalid response', 'error');
-        setMessages(msgs => [...msgs, { role: 'ai', text: 'Error fetching strategies from AI swarm.' }]);
+        toast('AI strategy error: Invalid response', 'error');
+        setMessages(msgs => [...msgs, { role: 'ai', text: 'Error fetching strategies from AI.' }]);
         setSwarmResults(null);
       }
     } catch (e) {
@@ -141,39 +145,35 @@ export const IndexPage = () => {
                 {msg.text}
               </div>
             ))}
-            {/* Swarm agent answers */}
+            {/* AI strategy results */}
             {swarmResults && swarmResults.agents && (
               <div style={{ marginTop: 16, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {swarmResults.agents.map((agent: any, i: number) => (
+                {swarmResults.agents.map((strategy: any, i: number) => (
                   <Card key={i} style={{ background: '#232e3c', color: '#f5f5f5', border: '1.5px solid #353945', borderRadius: 18, boxShadow: '0 2px 8px rgba(0,0,0,0.10)', padding: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: '#8ee4af', marginBottom: 2 }}>{agent.agent}</span>
-                      {agent.error ? (
-                        <span style={{ color: '#ffb3b3', fontSize: 15 }}>{agent.error}</span>
-                      ) : (
-                        <>
-                          <span style={{ color: '#b0b8c1', fontSize: 15 }}>{agent.answer}</span>
-                          {agent.strategies && agent.strategies.map((s: any, j: number) => (
-                            <div key={j} style={{ marginTop: 8, padding: 10, background: '#181A20', borderRadius: 10, border: '1px solid #353945' }}>
-                              <div style={{ fontWeight: 600, color: '#fff' }}>{s.title}</div>
-                              <div style={{ color: '#b0b8c1', fontSize: 14 }}>{s.description}</div>
-                              <div style={{ fontSize: 13, marginTop: 4, color: '#b0b8c1' }}>APY: <b style={{ color: '#fff' }}>{s.apy}</b> | TVL: <b style={{ color: '#fff' }}>{s.tvl}</b></div>
-                            </div>
-                          ))}
-                        </>
-                      )}
+                      <span style={{ fontSize: 16, fontWeight: 700, color: '#8ee4af', marginBottom: 2 }}>{strategy.title}</span>
+                      <span style={{ color: '#b0b8c1', fontSize: 15 }}>{strategy.description}</span>
+                      <div style={{ fontSize: 13, marginTop: 4, color: '#b0b8c1' }}>APY: <b style={{ color: '#fff' }}>{strategy.apy}</b> | TVL: <b style={{ color: '#fff' }}>{strategy.tvl}</b></div>
+                      <div style={{ marginTop: 16 }}>
+                        <button 
+                          onClick={() => handleExecute(strategy)}
+                          style={{ 
+                            background: '#8ee4af', 
+                            color: '#000', 
+                            border: 'none', 
+                            padding: '8px 16px', 
+                            borderRadius: 8, 
+                            cursor: 'pointer', 
+                            fontWeight: 600 
+                          }}
+                        >
+                          Execute Strategy
+                        </button>
+                      </div>
                     </div>
                   </Card>
                 ))}
-                {/* Consensus strategy */}
-                {swarmResults.consensus && (
-                  <Card style={{ background: '#3a7afe', color: '#fff', border: '2px solid #8ee4af', borderRadius: 20, boxShadow: '0 4px 16px rgba(58,122,254,0.10)', padding: 24, marginTop: 8 }}>
-                    <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 6 }}>Swarm Consensus</div>
-                    <div style={{ fontWeight: 600, fontSize: 16 }}>{swarmResults.consensus.title}</div>
-                    <div style={{ color: '#e0e0e0', fontSize: 15 }}>{swarmResults.consensus.description}</div>
-                    <div style={{ fontSize: 14, marginTop: 4 }}>APY: <b style={{ color: '#fff' }}>{swarmResults.consensus.apy}</b> | TVL: <b style={{ color: '#fff' }}>{swarmResults.consensus.tvl}</b></div>
-                  </Card>
-                )}
+
               </div>
             )}
             <div ref={chatEndRef} />

@@ -26,6 +26,35 @@ app.get('/health', (req, res) => res.send('TONVest backend running'));
 // POST /strategy - Robust Perplexity API integration with code block stripping
 app.post('/strategy', async (req, res) => {
   const { question } = req.body;
+  
+  // Check if API key is configured
+  if (!process.env.PERPLEXITY_API_KEY || process.env.PERPLEXITY_API_KEY === 'your_perplexity_api_key_here') {
+    console.log('Perplexity API key not configured, returning fallback response');
+    return res.json({
+      answer: "AI recommendations are currently unavailable. Please configure your Perplexity API key in the backend .env file to enable personalized DeFi strategies.",
+      strategies: [
+        {
+          title: "STON.fi Liquidity Pools",
+          description: "Provide liquidity to decentralized exchange pools on TON blockchain",
+          apy: "5-15%",
+          tvl: "12M TON"
+        },
+        {
+          title: "TON Staking",
+          description: "Stake TON tokens to secure the network and earn rewards",
+          apy: "4-6%",
+          tvl: "50M TON"
+        },
+        {
+          title: "DeDust AMM",
+          description: "Automated market maker providing yield through trading fees",
+          apy: "3-12%",
+          tvl: "8M TON"
+        }
+      ]
+    });
+  }
+
   try {
     const perplexityRes = await axios.post(
       'https://api.perplexity.ai/chat/completions',
@@ -65,6 +94,13 @@ app.post('/strategy', async (req, res) => {
     }
   } catch (err) {
     console.error('Failed to fetch from Perplexity API:', err.message);
+    // Check if it's an authentication error
+    if (err.response && err.response.status === 401) {
+      return res.status(503).json({ 
+        error: 'AI service temporarily unavailable', 
+        message: 'API authentication failed. Please check your API key configuration.' 
+      });
+    }
     res.status(500).json({ error: 'Failed to fetch from Perplexity API', details: err.message });
   }
 });
